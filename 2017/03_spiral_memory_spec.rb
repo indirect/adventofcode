@@ -1,5 +1,3 @@
-#!/usr/bin/ruby
-
 require "./03_spiral_memory"
 
 distances = {

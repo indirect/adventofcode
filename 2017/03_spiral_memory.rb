@@ -76,3 +76,14 @@ class SpiralMemory
     content.push loc
   end
 end
+
+if __FILE__ == $0
+  puts "part 1"
+  puts SpiralMemory.distance(325489)
+
+
+  puts "part 2"
+  sm = SpiralMemory.sum
+  sm.grow until sm.content.last.value > 325489
+  puts sm.content.last.value
+end
