@@ -20,7 +20,7 @@ sheet = input.split("\n").map{|r| r.split(/\s+/).map(&:to_i) }
 sum = sheet.map{|vals| vals.max - vals.min }.sum
 puts sum
 
-sum = sheet.map do |row| 
+sum = sheet.map do |row|
   cs = row.combination(2).map(&:sort)
   c = cs.find{|c| c.sort!; c[1].divmod(c[0]).last.zero? }
   c[1] / c[0]
