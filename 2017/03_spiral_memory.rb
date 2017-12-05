@@ -1,68 +1,78 @@
-#!/usr/bin/ruby
-
-input = 325489
-
-Grid = Struct.new(:size, :state) do
-  def max
-    size / 2
+class SpiralMemory
+  def self.distance(index = nil)
+    index ? new.entry(index).distance : new
   end
-end
 
-Location = Struct.new(:x, :y) do
-  def distance
-    x.abs + y.abs
+  def self.sum(index = nil)
+    sm = new do |x, y, sm|
+      surrounds = [0, 1, 1, -1, -1].permutation(2).uniq
+      surrounds.map{|ox, oy| sm[x+ox, y+oy] }.sum
+    end
+
+    index ? sm.entry(index).value : sm
   end
-end
 
-def distance(input)
-  input -= 1
-  grid = Grid.new(3, 1)
-  loc = Location.new(0, 0)
-
-  while input > 0
-    input -= 1
-    case grid.state
-    when 0
-      loc.x += 1
-      grid.state += 1 if loc.x == grid.max
-    when 1
-      loc.y += 1
-      grid.state += 1 if loc.y == grid.max
-    when 2
-      loc.x -= 1
-      grid.state += 1 if loc.x == -grid.max
-    when 3
-      loc.y -= 1
-      grid.state += 1 if loc.y == -grid.max
-    when 4
-      loc.x += 1
-      grid.state += 1 if loc.x == grid.max
-    when 5
-      loc.y += 1
-      if loc.y.zero?
-        grid.size += 2
-        grid.state = 1
-      end
-    else
-      p [grid, loc]
-      raise "wtf"
+  Location = Struct.new(:x, :y, :value) do
+    def distance
+      x.abs + y.abs
     end
   end
 
-  [loc.distance, grid, loc]
+  attr_reader :content, :value_proc, :default_value
+  attr_accessor :max, :state
+
+  def initialize(default_value = 0, &block)
+    @content = [Location.new(0, 0, 1)]
+    @max = 1
+    @state = 1
+    @value_proc = block
+    @default_value = default_value
+  end
+
+  def[](x, y)
+    loc = content.reverse.find do |loc|
+      loc.x == x && loc.y == y
+    end
+
+    loc ? loc.value : default_value
+  end
+
+  def entry(index)
+    grow until content.size == index
+    content.last
+  end
+
+  def grow
+    loc = content.last.dup
+
+    case self.state
+    when 1
+      loc.y += 1
+      self.state += 1 if loc.y == self.max
+    when 2
+      loc.x -= 1
+      self.state += 1 if loc.x == -self.max
+    when 3
+      loc.y -= 1
+      self.state += 1 if loc.y == -self.max
+    when 4
+      loc.x += 1
+      self.state += 1 if loc.x == self.max
+    when 5
+      loc.y += 1
+
+      if loc.y.zero?
+        self.max += 1
+        self.state = 1
+      end
+    end
+
+    if @value_proc
+      loc.value = @value_proc.call(loc.x, loc.y, self)
+    else
+      loc.value += 1
+    end
+
+    content.push loc
+  end
 end
-
-p distance 1
-p distance 12
-p distance 23
-p distance 1024
-p distance input
-
-def sum(count)
-  
-
-p sum 1
-p sum 2
-p sum 5
-p sum 10 # 26
-p sum 23 # 806
