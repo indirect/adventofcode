@@ -1,70 +1,31 @@
-Layer = Struct.new(:depth, :sentry, :direction)
-class Firewall
-  attr_reader :layers
-
-  def initialize(input, debug = false)
-    @debug = debug
-    @layers = []
-    input.map{|i| i.split(":").map(&:to_i) }.each do |i,d|
-      @layers[i] = Layer.new(d, 0, 1)
-    end
-    @packet = 0
-    @severity = 0
-  end
-
-  def step
-    puts inspect if @debug
-
-    l = @layers[@packet]
-    if l && l.sentry.zero?
-      @severity += l.depth * @packet
-    end
-
-    @layers.each do |l|
-      next if l.nil?
-      l.sentry += l.direction
-      l.direction *= -1 if l.sentry.zero? || l.sentry == (l.depth - 1)
-    end
-
-    @packet += 1
-  end
-
-  def severity
-    step until @packet == @layers.size
-    @severity
-  end
-
-  def inspect
-    map = [
-      "Picosecond #{@packet}:",
-      (0...@layers.size).map{|i| " #{i} " }.join(" ")
-    ]
-
-    @layers.compact.max_by(&:depth).depth.times do |i|
-      map << @layers.map.with_index do |l, idx|
-        if l && l.depth > i
-          str = (@packet == idx && i.zero?) ? "( )" : "[ ]"
-          l.sentry == i ? str.gsub(" ", "S") : str
-        else
-          if @packet == idx && i.zero?
-            "(.)"
-          else
-            i.zero? ? "..." : "   "
-          end
-        end
-      end.join(" ")
-    end
-
-    map.join("\n") + "\n"
-  end
+def parse(input)
+  input.chomp.split("\n").map{|i| i.split(": ").map(&:to_i) }
 end
 
-if $0 == __FILE__
-  input = parse(DATA.read)
-  testcase = parse("0: 3\n1: 2\n4: 4\n6: 4")
-
-  p Firewall.new(testcase, :debug).severity
+def severity(layers, delay = 0)
+  layers.map do |i, d|
+    i += delay
+    interval = 2 + (d-2) * 2
+    (i % interval).zero? ? i * d : 0
+  end.sum
 end
+
+def safe_delay(layers)
+  delay = 0
+  delay += 1 until severity(layers, delay).zero?
+  delay
+end
+
+input = parse(DATA.read)
+testcase = parse("0: 3\n1: 2\n4: 4\n6: 4")
+
+puts "part 1"
+raise "oh no" unless severity(testcase) == 24
+p severity(input)
+
+puts "part 2"
+raise "oh no" unless safe_delay(testcase) == 10
+p safe_delay(input)
 
 __END__
 0: 3
