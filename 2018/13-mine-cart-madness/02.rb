@@ -55,8 +55,11 @@ class Track
 
   def advance
     new_carts = []
+    old_carts = carts.sort_by{|c| [c[1], c[0]] }
     
-    carts.each do |x, y, c, n|
+    until old_carts.empty?
+      x, y, c, n = old_carts.shift
+
       case c
       when "<"
         nc = [x-1, y] + dir(x-1, y, c, n)
@@ -68,8 +71,9 @@ class Track
         nc = [x, y+1] + dir(x, y+1, c, n)
       end
       
-      if new_carts.any?{|c| c[0..1] == nc[0..1] }
+      if (new_carts + old_carts).any?{|c| c[0..1] == nc[0..1] }
         new_carts.reject!{|c| c[0..1] == nc[0..1] }
+        old_carts.reject!{|c| c[0..1] == nc[0..1] }
       else
         new_carts << nc
       end
@@ -98,7 +102,8 @@ end
 #t = Track.new(test, :debug)
 t = Track.new(input)
 t.advance until t.carts.size == 3
-t.inspect; t.advance until t.carts.size == 1
-p t
-t.advance
+until t.carts.size == 1
+  t.advance
+  t.inspect if (t.step % 1000).zero?
+end
 p t
