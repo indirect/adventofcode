@@ -1,7 +1,10 @@
 # input = File.read("input.txt")
 input = File.read("test5.txt")
 
-Unit = Struct.new(:x, :y, :kind, :hp)
+Unit = Struct.new(:x, :y, :kind, :hp) do
+  def xy; [x, y]; end
+  def xy=(c); self.x = c[0]; self.y = c[1]; end
+end
 
 module Enumerable
   def read_sort
@@ -9,12 +12,111 @@ module Enumerable
   end
 end
 
-class Cave
+class Astar
+  Node = Struct.new(:xy, :distance, :heuristic, :parent) do
+    def cost; distance + heuristic; end
+  end
+
+  attr_reader :map, :src, :dest, :path
+  attr_accessor :open_list, :closed_list
+
+  def initialize(map, src, dest)
+    @map = map
+    @src = src
+    @dest = dest
+    @path = find_path
+  end
+
+  def find_path
+    open_list = [Node.new(src, 0, 0)]
+    closed_list = []
+    current = nil
+
+    until open_list.empty?
+      current = open_list.min_by(&:cost)
+      closed_list.push open_list.delete(current)
+
+      break if current.xy == dest
+
+      nearby = @map.around(current.xy).
+        select { |xy| @map[xy] == "." }.
+        reject { |xy| closed_list.any? { |n| n.xy == xy } }
+
+      nearby.each do |xy|
+        earlier = open_list.find { |n| n.xy == xy }
+        if earlier
+          if current.distance < earlier.distance
+            earlier.parent = current
+            earlier.distance = current.distance + 1
+          end
+        else
+          open_list << Node.new(
+            xy,
+            current.distance + 1,
+            @map.mdist(xy, dest),
+            current
+          )
+        end
+      end
+    end
+
+    if current.xy == dest
+      [current].tap { |path| path.unshift(path.first.parent) until path.first.parent.nil? }
+    end
+  end
+
+  def result
+    if path&.last&.xy == dest
+      [path.last.distance, path[1].xy]
+    else
+      nil
+    end
+  end
+end
+
+class Map
   def initialize(input)
-    @map = input.split("\n").map(&:chars)
+    @rows = input.split("\n").map(&:chars)
+  end
+
+  def each_row(&block)
+    @rows.each(&block)
+  end
+
+  def inspect
+    @rows.map(&:join).join("\n")
+  end
+
+  def [](c)
+    @rows[c[1]][c[0]]
+  end
+
+  def []=(c, v)
+    @rows[c[1]][c[0]] = v
+  end
+
+  def around(t)
+    [[t[0], t[1] + 1], [t[0], t[1] - 1], [t[0] + 1, t[1]], [t[0] - 1, t[1]]].
+      select { |(x, y)| x >= 0 && y >= 0 }
+  end
+
+  def mdist(src, dest)
+    (src[0] - dest[0]).abs + (src[1] - dest[1]).abs
+  end
+
+  def heuristic(src, dest)
+    (src[0] - dest[0]).abs ** 2 + (src[1] - dest[1]).abs ** 2
+  end
+end
+
+class Cave
+  attr_reader :map
+
+  def initialize(input)
+    @map = Map.new(input)
     @units = []
 
-    @map.each.with_index do |row, y|
+    @map.each_row.with_index do |row, y|
       row.each.with_index do |char, x|
         @units << Unit.new(x, y, char, 200) if %w[G E].include?(char)
       end
@@ -24,25 +126,38 @@ class Cave
   end
 
   def elves
-    @units.select{ |u| u.kind == "E" }
+    @units.select { |u| u.kind == "E" }
   end
 
   def goblins
-    @units.select{ |u| u.kind == "G" }
+    @units.select { |u| u.kind == "G" }
   end
 
   def sorted_units
     @units.sort_by { |u| [u.y, u.x] }
   end
 
-  def step
+  def outcome
+    combat
+    @step * @units.map(&:hp).sum
+  end
+
+  def combat
     catch :done do
-      sorted_units.each do |u|
-        move(u)
+      loop do
+        if ENV["DEBUG"]
+          puts "After #{@step} rounds:"
+          puts map.inspect
+          puts
+        end
+
+        sorted_units.each do |u|
+          move(u)
+        end
+
+        @step += 1
       end
     end
-
-    @step += 1
   end
 
   def targets(u)
@@ -51,14 +166,16 @@ class Cave
 
   def move(u)
     in_range = targets(u).flat_map do |t|
-      around([t.x, t.y])
+      @map.around([t.x, t.y])
     end.read_sort
 
-    return attack(u) if in_range.include?([u.x, u.y])
+    throw :done if in_range.empty?
 
-    open_in_range = in_range.select { |(x, y)| @map[y][x] == "." }
+    return attack(u) if in_range.include?(u.xy)
+
+    open_in_range = in_range.select { |c| @map[c] == "." }
     distances = open_in_range.map do |(x, y)|
-      [x, y, *dist([u.x, u.y], [x, y])]
+      [x, y, *Astar.new(@map, [u.x, u.y], [x, y]).result]
     end.select { |(x, y, d)| d }
 
     return if distances.empty?
@@ -66,19 +183,18 @@ class Cave
     min = distances.map { |(x, y, d)| d }.min
     dest = distances.select { |(x, y, d)| d == min }.read_sort.first.last
 
-    @map[u.y][u.x] = "."
-    @map[dest[1]][dest[0]] = u.kind
-    u.x = dest[0]
-    u.y = dest[1]
+    @map[u.xy] = "."
+    @map[dest] = u.kind
+    u.xy = dest
 
     attack(u) if in_range.include?([u.x, u.y])
   end
 
   def attack(u)
-    adj = around([u.x, u.y])
+    adj = @map.around([u.x, u.y])
     targets_in_range = targets(u).
-      select{|t| adj.include?([t.x,t.y]) }.
-      sort_by!{|t| [t.hp, t.y, t.x] }
+      select { |t| adj.include?([t.x, t.y]) }.
+      sort_by! { |t| [t.hp, t.y, t.x] }
 
     return if targets_in_range.empty?
 
@@ -86,67 +202,9 @@ class Cave
     target.hp -= 3
 
     if target.hp <= 0
-      @map[target.y][target.x] = "."
+      @map[target.xy] = "."
       @units.delete(target)
     end
-  end
-
-  def at(c)
-    @map[c[1]][c[0]]
-  end
-
-  def around(t)
-    [[t[0], t[1] + 1], [t[0], t[1] - 1], [t[0] + 1, t[1]], [t[0] - 1, t[1]]]
-  end
-
-  def mdist(src, dest)
-    (src[0] - dest[0]).abs + (src[1] - dest[1]).abs
-  end
-
-  def dist(src, dest)
-    binding.pry if @step > 24 && dest == [5,5]
-
-    src_path = [src]
-    dest_path = [dest]
-    rejects = []
-
-    until mdist(src_path.last, dest_path.first) == 1
-      src_options = around(src_path.last).select { |c| at(c) == "." }.
-        reject { |o| src_path.include?(o) || rejects.include?(o) }
-      dest_options = around(dest_path.first).select { |c| at(c) == "." }.
-        reject { |o| dest_path.include?(o) || rejects.include?(o) }
-
-      return nil if src_options.empty? && dest_options.empty?
-
-      if src_options.any?
-        src_next = src_options.
-          map { |o| o + [mdist(o, dest_path.first)] }.
-          sort_by { |(x, y, d)| [d, y, x] }
-        src_path.push src_next.shift[0..1]
-        rejects.push *src_next
-        break if mdist(src_path.last, dest_path.first) == 1
-      elsif src_path.size > 1
-        rejects.push(src_path.pop)
-      end
-
-      if dest_options.any?
-        dest_next = dest_options.
-          map { |o| o + [mdist(o, src_path.last)] }.
-          sort_by { |(x, y, d)| [d, y, x] }
-        dest_path.unshift dest_next.shift[0..1]
-        rejects.push *dest_next
-      elsif dest_path.size > 1
-        rejects.push(dest_path.shift)
-      end
-    end
-
-    found_dist = (src_path.size + dest_path.size) - 1
-    next_step = src_path[1] || dest
-    [found_dist, next_step]
-  end
-
-  def map
-    @map.map(&:join).join("\n")
   end
 
   def inspect
@@ -156,8 +214,4 @@ end
 
 c = Cave.new(input)
 
-27.times do
-  c.step
-  p c
-  puts c.map
-end
+p c.outcome
