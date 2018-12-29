@@ -1,5 +1,5 @@
-# input = File.read("input.txt")
-input = File.read("test5.txt")
+input = File.read("input.txt")
+# input = File.read("test5.txt")
 
 Unit = Struct.new(:x, :y, :kind, :hp) do
   def xy; [x, y]; end
@@ -139,25 +139,30 @@ class Cave
 
   def outcome
     combat
-    @step * @units.map(&:hp).sum
+    @step * @units.map(&:hp).inject(:+)
+  end
+
+  def debug
+    puts "\e[2J" # clear the screen
+    puts "After #{@step} rounds:"
+    puts map.inspect
+    puts
   end
 
   def combat
     catch :done do
       loop do
-        if ENV["DEBUG"]
-          puts "After #{@step} rounds:"
-          puts map.inspect
-          puts
-        end
+        debug if ENV["DEBUG"]
 
-        sorted_units.each do |u|
-          move(u)
-        end
+        sorted_units.each { |u| move(u) }
 
         @step += 1
       end
     end
+
+    puts "End result, in the middle of round #{@step + 1}:"
+    puts map.inspect
+    puts @step * @units.map(&:hp).inject(:+)
   end
 
   def targets(u)
@@ -169,9 +174,8 @@ class Cave
       @map.around([t.x, t.y])
     end.read_sort
 
-    throw :done if in_range.empty?
-
     return attack(u) if in_range.include?(u.xy)
+    throw :done if in_range.empty?
 
     open_in_range = in_range.select { |c| @map[c] == "." }
     distances = open_in_range.map do |(x, y)|
@@ -212,6 +216,30 @@ class Cave
   end
 end
 
+Cave.new("#########
+#G......#
+#.E.#...#
+#..##..G#
+#...##..#
+#...#...#
+#.G...G.#
+#.....G.#
+#########").outcome == 18740 || raise("oh no not 18740")
+Cave.new("#######
+#.E...#
+#.#..G#
+#.###.#
+#E#G#G#
+#...#G#
+#######").outcome == 28944 || raise("oh no, not 28944")
+
 c = Cave.new(input)
 
+if RUBY_ENGINE == "ruby"
+  Signal.trap("INFO") { puts c.debug }
+end
+
 p c.outcome
+
+binding.pry
+puts "done"
