@@ -45,7 +45,7 @@ class Astar
       nearby.each do |xy|
         earlier = open_list.find { |n| n.xy == xy }
         if earlier
-          if current.distance < earlier.distance
+          if (current.distance + 1) < earlier.distance
             earlier.parent = current
             earlier.distance = current.distance + 1
           end
@@ -53,7 +53,7 @@ class Astar
           open_list << Node.new(
             xy,
             current.distance + 1,
-            @map.mdist(xy, dest),
+            @map.heuristic(xy, dest),
             current
           )
         end
@@ -216,22 +216,22 @@ class Cave
   end
 end
 
-Cave.new("#########
-#G......#
-#.E.#...#
-#..##..G#
-#...##..#
-#...#...#
-#.G...G.#
-#.....G.#
-#########").outcome == 18740 || raise("oh no not 18740")
-Cave.new("#######
-#.E...#
-#.#..G#
-#.###.#
-#E#G#G#
-#...#G#
-#######").outcome == 28944 || raise("oh no, not 28944")
+# Cave.new("#########
+# #G......#
+# #.E.#...#
+# #..##..G#
+# #...##..#
+# #...#...#
+# #.G...G.#
+# #.....G.#
+# #########").outcome == 18740 || raise("oh no not 18740")
+# Cave.new("#######
+# #.E...#
+# #.#..G#
+# #.###.#
+# #E#G#G#
+# #...#G#
+# #######").outcome == 28944 || raise("oh no, not 28944")
 
 c = Cave.new(input)
 
